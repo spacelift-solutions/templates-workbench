@@ -93,7 +93,7 @@ variable "spacelift_api_key_secret" {
 variable "space_id" {
   type        = string
   description = "Spacelift Space ID where the worker pool will be created"
-  default     = "root"
+  default     = "aws-01JB2XV4KVTX3XDTF789ZQ0SYT"
 }
 
 # ------------------------------------------------------------------------------
