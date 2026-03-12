@@ -11,7 +11,6 @@ templates-workbench/                    ← repo root
     ├── stacks/
     │   └── worker-pool/
     │       └── main.tf                 ← Terraform code (spacelift_worker_pool + EC2 module)
-    ├── WORKSHOP.md                     ← Step-by-step workshop guide
     └── README.md                       ← This file
 ```
 
