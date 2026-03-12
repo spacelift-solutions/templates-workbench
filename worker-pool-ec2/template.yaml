@@ -1,0 +1,90 @@
+# Self-Service v2 Template: AWS EC2 Worker Pool
+# Docs: https://docs.spacelift.io/concepts/template/configuration
+#
+# Repo structure:
+#   templates-workbench/           <- repo root
+#   └── worker-pool-ec2/
+#       ├── template.yaml          <- this file
+#       └── stacks/
+#           └── worker-pool/
+#               └── main.tf        <- Terraform code
+
+inputs:
+  - id: worker_pool_name
+    name: Worker Pool Name
+    type: short_text
+
+  - id: aws_region
+    name: AWS Region
+    type: short_text
+
+  - id: ec2_instance_type
+    name: EC2 Instance Type
+    type: select
+    options:
+      - t3.small
+      - t3.medium
+      - t3.large
+      - m5.large
+
+  - id: min_size
+    name: Minimum Workers
+    type: short_text
+
+  - id: max_size
+    name: Maximum Workers
+    type: short_text
+
+  - id: vpc_subnet_ids
+    name: VPC Subnet IDs
+    type: short_text
+    description: "Comma-separated subnet IDs (e.g., subnet-abc123,subnet-def456)"
+
+  - id: security_group_ids
+    name: Security Group IDs
+    type: short_text
+    description: "Comma-separated SG IDs (e.g., sg-abc123)"
+
+stacks:
+  - key: worker-pool
+    name: ${{ context.deployment.name }}-worker-pool
+    vcs:
+      reference:
+        type: branch
+        value: main
+      repository: templates-workbench
+      namespace: spacelift-solutions
+      provider: GITHUB
+      project_root: worker-pool-ec2/stacks/worker-pool
+    vendor:
+      terraform:
+        manage_state: true
+        workflow_tool: OPEN_TOFU
+    environment:
+      variables:
+        - name: TF_VAR_worker_pool_name
+          value: "${{ inputs.worker_pool_name }}"
+        - name: TF_VAR_aws_region
+          value: "${{ inputs.aws_region }}"
+        - name: TF_VAR_ec2_instance_type
+          value: "${{ inputs.ec2_instance_type }}"
+        - name: TF_VAR_min_size
+          value: "${{ inputs.min_size }}"
+        - name: TF_VAR_max_size
+          value: "${{ inputs.max_size }}"
+        - name: TF_VAR_vpc_subnet_ids
+          value: "${{ inputs.vpc_subnet_ids }}"
+        - name: TF_VAR_security_group_ids
+          value: "${{ inputs.security_group_ids }}"
+        # API key credentials — pre-configure in a Spacelift Context
+        # and attach via the attachments block, or set as secrets here.
+     attachments:
+       clouds:
+         aws:
+           id: 01JAZPBRW3K2YB0K7F58NZSDY6
+           read: true
+           write: true
+       contexts:
+         - id: worker-pool-api-credentials
+           priority: 1
+    autodeploy: true
