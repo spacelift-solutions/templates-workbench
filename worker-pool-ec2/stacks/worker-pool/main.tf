@@ -57,13 +57,15 @@ variable "max_size" {
 }
 
 variable "vpc_subnet_ids" {
-  type        = list(string)
-  description = "List of VPC subnet IDs where workers will be deployed"
+  type        = string    
+  description = "Comma-separated VPC subnet IDs"
+  default     = ""
 }
 
 variable "security_group_ids" {
-  type        = list(string)
-  description = "List of security group IDs to attach to workers"
+  type        = string    
+  description = "Comma-separated security group IDs"
+  default     = ""
 }
 
 variable "aws_region" {
@@ -154,8 +156,8 @@ module "ec2_workers" {
   min_size          = var.min_size
   max_size          = var.max_size
   worker_pool_id    = spacelift_worker_pool.this.id
-  security_groups   = var.security_group_ids
-  vpc_subnets       = var.vpc_subnet_ids
+  security_groups   = split(",", var.security_group_ids)
+  vpc_subnets       = split(",", trimspace(var.vpc_subnet_ids))
 
   # Autoscaler — Lambda that queries Spacelift queue and adjusts ASG
   spacelift_api_credentials = {
