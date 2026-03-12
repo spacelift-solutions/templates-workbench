@@ -78,13 +78,13 @@ stacks:
           value: "${{ inputs.security_group_ids }}"
         # API key credentials — pre-configure in a Spacelift Context
         # and attach via the attachments block, or set as secrets here.
-     attachments:
-       clouds:
-         aws:
-           id: 01JAZPBRW3K2YB0K7F58NZSDY6
-           read: true
-           write: true
-       contexts:
-         - id: worker-pool-api-credentials
-           priority: 1
+    attachments:
+      clouds:
+        aws:
+          id: 01JAZPBRW3K2YB0K7F58NZSDY6
+          read: true
+          write: true
+      contexts:
+        - id: worker-pool-api-credentials
+          priority: 1
     autodeploy: true
