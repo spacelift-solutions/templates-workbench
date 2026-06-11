@@ -1,0 +1,169 @@
+# Top-level space (replaces per-stack space field)
+space: opentofu-01JB2XV5E3ZR3NDTKCN80KS6RH
+
+#User Inputs
+inputs:
+  - id: instance_type
+    name: EC2 Instance Type
+    type: short_text
+    default: t3.medium
+
+  - id: s3_bucket
+    name: Existing S3 Bucket for Saves
+    type: short_text
+    default: minesible-world-backup
+
+  - id: motd
+    name: Server MOTD
+    type: short_text
+    default: "Welcome to Minesible!"
+
+  - id: max_players
+    name: Max Players
+    type: number
+    default: 5
+
+stacks:
+
+  # Stack 1: OpenTofu
+  - key: stack1
+    name: Minesible-Opentofu-Blueprint-${{ context.random_string }}
+    description: >
+      Minecraft server infra stack created from blueprint by ${{ context.user.name }}.
+    labels:
+      - minesible
+    worker_pool: 01JCZY4WD38EJS5S94B64E0V1Z
+
+    vcs:
+      reference:
+        value: main
+        type: branch
+      repository: minesible
+      provider: GITHUB
+      project_root: stacks/opentofu
+
+    vendor:
+      terraform:
+        manage_state: true
+        workflow_tool: OPEN_TOFU
+        version: "1.10.2"
+        use_smart_sanitization: true
+
+    attachments:
+      clouds:
+        aws:
+          id: 01JAZPBRW3K2YB0K7F58NZSDY6
+          read: true
+          write: true
+
+    environment:
+      variables:
+        - name: TF_VAR_s3_bucket
+          value: ${{ inputs.s3_bucket }}
+          description: S3 bucket for Minecraft world saves
+
+        - name: TF_VAR_instance_type
+          value: ${{ inputs.instance_type }}
+
+        - name: TF_VAR_motd
+          value: ${{ inputs.motd }}
+
+        - name: TF_VAR_max_players
+          value: "${{ inputs.max_players }}"
+
+    hooks:
+      destroy:
+        before:
+          - test -d /home/ec2-user/minecraft && cd /home/ec2-user/minecraft && zip -r spacelift-world.zip spacelift-world || true
+          - test -f /home/ec2-user/minecraft/spacelift-world.zip && aws s3 cp /home/ec2-user/minecraft/spacelift-world.zip s3://$TF_VAR_s3_bucket/spacelift-world.zip || true
+
+    schedules:
+      drift:
+        cron:
+          - "*/30 * * * *"
+        reconcile: true
+        ignore_state: true
+        timezone: America/Toronto
+      tasks:
+        - command: tofu destroy -auto-approve
+          cron:
+            - "0 */3 * * *"
+          timezone: America/Toronto
+
+    autodeploy: true
+
+  # Stack 2: Ansible
+  - key: stack2
+    name: Minesible-Ansible-Blueprint-${{ context.random_string }}
+    labels:
+      - minesible
+    worker_pool: 01JCZY4WD38EJS5S94B64E0V1Z
+    runner_image: public.ecr.aws/spacelift/runner-ansible:legacy
+    depends_on:
+      - stack1
+
+    vcs:
+      reference:
+        value: main
+        type: branch
+      repository: minesible
+      provider: GITHUB
+      project_root: stacks/ansible
+
+    vendor:
+      ansible:
+        playbook: playbook.yml
+
+    environment:
+      variables:
+        - name: ANSIBLE_INVENTORY
+          value: inventory.ini
+          description: Inventory File Name
+
+        - name: ANSIBLE_HOST_KEY_CHECKING
+          value: "false"
+          description: For running custom tasks without a key check
+
+      stack_dependency_references:
+        - name: S3_BUCKET
+          output: s3_bucket
+          from_stack: stack1
+        - name: EC2_IP
+          output: ec2_ip
+          from_stack: stack1
+        - name: MOTD
+          output: motd
+          from_stack: stack1
+        - name: MAX_PLAYERS
+          output: max_players
+          from_stack: stack1
+
+    hooks:
+      init:
+        before:
+          - echo "[minecraft]" > inventory.ini && echo "$EC2_IP ansible_user=ec2-user ansible_ssh_private_key_file=/mnt/workspace/minesible-access.pem" >> inventory.ini
+          - chmod 600 /mnt/workspace/minesible-access.pem || true
+          - |
+            echo "Waiting for EC2 to become reachable..."
+            for i in $(seq 1 60); do
+              echo "Probing $EC2_IP on port 22 (attempt $i)..."
+              if nc -z "$EC2_IP" 22; then
+                echo "✅ EC2 is ready!"
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "❌ EC2 did not become ready in time."
+            exit 1
+      apply:
+        before:
+          - chmod 600 /mnt/workspace/minesible-access.pem
+
+    schedules:
+      tasks:
+        - command: ansible-playbook save-world.yml
+          cron:
+            - "0 0/6 * * *"
+          timezone: America/Toronto
+
+    autodeploy: true
